@@ -31,11 +31,12 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
 
-input_sizes = [64, 128, 256, 512, 1024]  
+input_sizes = [120, 240, 360, 480, 600, 720, 840, 960, 1200, 1320]
 block_timings = {"Scatter": [], "Compute": [], "Gather": [], "Total": []}
 memory_usages = []
 all_timings = []
-
+sequential_timings = []  # To store sequential times for each matrix size
+parallel_timings = []    # To store parallel total times for each matrix size
 
 grid_size = int(np.sqrt(size))
 assert grid_size**2 == size, "Number of processes must be a perfect square!"
@@ -45,7 +46,7 @@ if __name__ == "__main__":
     for N in input_sizes:
         assert N % grid_size == 0, "Matrix size N must be divisible by grid_size!"
         block_size = N // grid_size
-
+      
         if rank == 0:
             A = np.random.rand(N, N).astype(np.float64)
             B = np.random.rand(N, N).astype(np.float64)
@@ -147,6 +148,9 @@ if __name__ == "__main__":
             seq_time = end_seq - start_seq
             seq_memory_usage = abs(mem_after - mem_before) / 1024
             
+            sequential_timings.append(seq_time)
+            parallel_timings.append(block_timings['Total'][-1])
+            
             compare_results(seq_result, C)
 
             print(f"\nMatrix Size: {N}x{N}")
@@ -161,6 +165,17 @@ if __name__ == "__main__":
             print(f"Total Squential Time: {
                   seq_time:.6f} s, Sequential memory usage : {seq_memory_usage} KB")
 
+
+    if rank == 0:
+        # Save results to a file in append mode
+        with open(f"results_{size}.txt", "a") as f:
+            # Add a header only if the file is empty
+            if f.tell() == 0:
+                f.write("MatrixSize,NumProcesses,SequentialTime,ParallelTime\n")
+            for i in range(len(input_sizes)):
+                f.write(f"{input_sizes[i]},{size},{
+                        sequential_timings[i]},{parallel_timings[i]}\n")
+            
     if rank == 0:
         plt.figure(figsize=(10, 6))
         for key, timings in block_timings.items():
